@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KIM CARD</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root{--gold:#d7b15d;--bg:#090909;--panel:#151515;--line:#353535;--muted:#aaa}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:#f5f5f5;font-family:Arial,sans-serif}
+    header{padding:16px 5%;background:#111;border-bottom:1px solid #624d25;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .logo{font-size:25px;font-weight:800;color:var(--gold);letter-spacing:1px}
+    main{max-width:1120px;margin:auto;padding:18px}
+    nav{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+    button{border:0;border-radius:8px;padding:11px 15px;background:var(--gold);color:#111;font-weight:700;cursor:pointer}
+    button.secondary,nav button{background:#282828;color:#fff}nav button.active{background:var(--gold);color:#111}
+    button.danger{background:#8b2929;color:white}button:disabled{opacity:.5;cursor:not-allowed}
+    input,textarea,select{display:block;width:100%;padding:12px;margin:7px 0 13px;border:1px solid #444;border-radius:8px;background:#222;color:white}
+    textarea{min-height:85px;resize:vertical}label{font-size:14px;color:#ddd}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin:13px 0}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:14px}
+    .product{overflow:hidden;background:#171717;border:1px solid var(--line);border-radius:12px}
+    .product img{width:100%;height:155px;object-fit:cover;background:#222}
+    .product .info{padding:12px}.price{color:var(--gold);font-weight:bold;font-size:19px}
+    h2,h3{color:var(--gold)}.muted{color:var(--muted);font-size:13px}
+    .hidden{display:none!important}.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:160px}
+    .notice{padding:12px;border:1px solid #715b2b;border-radius:8px;background:#211c10;color:#f1d99e;white-space:pre-wrap;overflow-wrap:anywhere}
+    .error{border-color:#813737;background:#241313;color:#ffc5c5}
+    .item{padding:12px 0;border-bottom:1px solid #333}.item:last-child{border:0}
+    footer{text-align:center;color:#999;padding:24px}
+    a{color:var(--gold)}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">KIM CARD</div>
+  <div id="accountArea"><button onclick="showAuth()">تسجيل الدخول</button></div>
+</header>
+
+<main>
+  <section id="setupNotice" class="notice">
+    يلزم إدخال رابط Supabase ومفتاح النشر العام sb_publishable داخل إعدادات الملف قبل الاتصال.
+  </section>
+
+  <section id="authBox" class="panel hidden">
+    <h2>تسجيل الدخول أو إنشاء حساب</h2>
+    <label>البريد الإلكتروني</label><input id="authEmail" type="email" autocomplete="email" placeholder="name@example.com">
+    <label>كلمة المرور</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="8 أحرف على الأقل">
+    <div class="row">
+      <button onclick="signIn()">تسجيل الدخول</button>
+      <button class="secondary" onclick="signUp()">إنشاء حساب</button>
+    </div>
+    <button class="secondary" onclick="hideAuth()">إغلاق</button>
+    <p id="authMessage" class="muted"></p>
+  </section>
+
+  <nav>
+    <button class="active" onclick="showPage('store',this)">المتجر</button>
+    <button onclick="showPage('orders',this)">طلباتي</button>
+    <button onclick="showPage('wallet',this)">محفظتي</button>
+    <button onclick="showPage('topup',this)">إضافة رصيد</button>
+    <button onclick="showPage('withdraw',this)">طلب سحب</button>
+    <button id="adminNav" class="hidden" onclick="showPage('admin',this)">لوحة التحكم</button>
+  </nav>
+
+  <section id="storePage">
+    <div class="panel">
+      <h2>أهلاً بك في KIM CARD</h2>
+      <p>متجر الألعاب والبطاقات الرقمية والخدمات الإلكترونية.</p>
+      <p class="muted">العملة: USD — الدفع اليدوي عبر شام كاش يخضع لمراجعة الإدارة.</p>
+    </div>
+    <h2>المنتجات</h2>
+    <div id="products" class="grid">جاري تحميل المنتجات...</div>
+  </section>
+
+  <section id="ordersPage" class="hidden"><h2>طلباتي</h2><div id="myOrders"></div></section>
+
+  <section id="walletPage" class="hidden">
+    <h2>محفظتي</h2>
+    <div class="panel"><p>الرصيد المتاح</p><h2 id="balance">$0.00</h2><p class="muted">الرصيد يُقرأ من قاعدة البيانات ولا يمكن تغييره من المتصفح.</p></div>
+  </section>
+
+  <section id="topupPage" class="hidden">
+    <h2>إضافة رصيد عبر شام كاش</h2>
+    <div class="panel">
+      <label>المبلغ بالدولار</label><input id="topupAmount" type="number" min="1" step="0.01" placeholder="10">
+      <label>صورة إثبات الدفع (حتى 5MB)</label><input id="topupProof" type="file" accept="image/*">
+      <button onclick="submitTopup()">إرسال طلب الإضافة</button>
+      <p class="muted">لا يُضاف أي رصيد قبل مراجعة الإثبات وموافقة الإدارة.</p><p id="topupMessage"></p>
+    </div>
+  </section>
+
+  <section id="withdrawPage" class="hidden">
+    <h2>طلب سحب رصيد</h2>
+    <div class="panel">
+      <label>المبلغ بالدولار — الحد الأدنى 10.1</label><input id="withdrawAmount" type="number" min="10.1" step="0.01">
+      <label>معلومات الاستلام عبر شام كاش</label><input id="withdrawDetails" placeholder="أدخل معلومات الاستلام">
+      <button onclick="submitWithdrawal()">إرسال طلب السحب</button>
+      <p class="muted">يجب أن يتحقق الخادم من الرصيد ويحجز المبلغ لمنع تكرار طلبات السحب. لا يتم تأكيد السحب قبل تنفيذه فعلياً.</p>
+      <p id="withdrawMessage"></p>
+    </div>
+  </section>
+
+  <section id="adminPage" class="hidden">
+    <h2>لوحة تحكم KIM CARD</h2>
+    <div class="panel">
+      <h3>إضافة منتج</h3>
+      <label>اسم المنتج</label><input id="newName" placeholder="اسم المنتج">
+      <label>الوصف</label><textarea id="newDescription" placeholder="وصف المنتج"></textarea>
+      <label>السعر بالدولار</label><input id="newPrice" type="number" min="0" step="0.01">
+      <label>القسم</label>
+      <select id="newCategory">
+        <option>الألعاب</option><option>التطبيقات</option><option>البطاقات الرقمية</option><option>شحن الرصيد</option><option>خدمات أخرى</option>
+      </select>
+      <label>صورة المنتج</label><input id="newImage" type="file" accept="image/*">
+      <button onclick="addProduct()">نشر المنتج</button><p id="productMessage"></p>
+    </div>
+    <div class="panel"><h3>إدارة المنتجات</h3><div id="adminProducts"></div></div>
+    <div class="panel"><h3>طلبات الشراء</h3><div id="adminOrders"></div></div>
+    <div class="panel"><h3>طلبات إضافة الرصيد</h3><div id="adminTopups"></div></div>
+    <div class="panel"><h3>طلبات السحب</h3><div id="adminWithdrawals"></div></div>
+  </section>
+</main>
+
+<footer>
+  KIM CARD © جميع الحقوق محفوظة
+  <p>خدمة العملاء: <a href="https://wa.me/447312938165" target="_blank" rel="noopener">واتساب</a></p>
+</footer>
+
+<script>
+/* 1) ضع هنا رابط مشروعك ومفتاح النشر العام فقط.
+   لا تضع service_role أو sb_secret أو كلمة مرور هنا. */
+const SUPABASE_URL = "https://jytwrtgqwrecbpourdzd.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "PASTE_YOUR_SB_PUBLISHABLE_KEY_HERE";
+
+const configured =
+  SUPABASE_URL.startsWith("https://") &&
+  SUPABASE_PUBLISHABLE_KEY.startsWith("sb_publishable_");
+
+const db = configured
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+  : null;
+
+let currentUser = null;
+let currentRole = "user";
+
+const $ = id => document.getElementById(id);
+const escapeHTML = value => String(value ?? "").replace(/[&<>"']/g, c => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
+const showMessage = (id, text, isError=false) => {
+  const node = $(id);
+  node.textContent = text || "";
+  node.className = isError ? "notice error" : "muted";
+};
+const errorText = error => {
+  if (!error) return "خطأ غير معروف";
+  return [error.message, error.details, error.hint, error.code ? "Code: "+error.code : ""].filter(Boolean).join("\n");
+};
+
+if (!configured) {
+  $("setupNotice").textContent =
+    "الاتصال غير مهيأ: افتح إعدادات الملف واستبدل PASTE_YOUR_SB_PUBLISHABLE_KEY_HERE بمفتاح sb_publishable من Supabase.";
+} else {
+  $("setupNotice").classList.add("hidden");
+}
+
+function requireConnection() {
+  if (!db) {
+    alert("أدخل مفتاح sb_publishable الصحيح في أعلى ملف index.html أولاً.");
+    return false;
+  }
+  return true;
+}
+function showAuth(){ $("authBox").classList.remove("hidden"); }
+function hideAuth(){ $("authBox").classList.add("hidden"); }
+
+async function signUp(){
+  if(!requireConnection()) return;
+  const email=$("authEmail").value.trim(), password=$("authPassword").value;
+  if(!email || password.length<8) return showMessage("authMessage","أدخل بريداً صحيحاً وكلمة مرور من 8 أحرف على الأقل.",true);
+  const {error}=await db.auth.signUp({email,password});
+  showMessage("authMessage",error ? errorText(error) : "تم إرسال طلب إنشاء الحساب. افحص بريدك إذا كان تأكيد البريد مفعّلاً.");
+}
+async function signIn(){
+  if(!requireConnection()) return;
+  const email=$("authEmail").value.trim(), password=$("authPassword").value;
+  const {error}=await db.auth.signInWithPassword({email,password});
+  if(error) return showMessage("authMessage",errorText(error),true);
+  hideAuth();
+  await loadSession();
+}
+async function signOut(){
+  if(!db) return;
+  const {error}=await db.auth.signOut();
+  if(error) return alert(errorText(error));
+  currentUser=null; currentRole="user"; location.reload();
+}
+
+async function loadSession(){
+  if(!db) return;
+  const {data,error}=await db.auth.getUser();
+  if(error) { console.error(error); return; }
+  currentUser=data.user || null;
+  if(!currentUser){
+    $("accountArea").innerHTML='<button onclick="showAuth()">تسجيل الدخول</button>';
+    $("adminNav").classList.add("hidden");
+    return;
+  }
+  $("accountArea").innerHTML=`<span>${escapeHTML(currentUser.email)}</span> <button class="secondary" onclick="signOut()">تسجيل الخروج</button>`;
+  const {data:profile,error:profileError}=await db.from("profiles").select("role").eq("id",currentUser.id).maybeSingle();
+  if(profileError) {
+    console.warn("profiles lookup:",profileError);
+    currentRole="user";
+  } else {
+    currentRole=profile?.role || "user";
+  }
+  $("adminNav").classList.toggle("hidden",!isAdmin());
+  await loadBalance();
+  await loadOrders();
+}
+function isAdmin(){return currentRole==="SUPER ADMIN" || currentRole==="ADMIN";}
+
+function showPage(page,button){
+  ["store","orders","wallet","topup","withdraw","admin"].forEach(p=>$(p+"Page").classList.add("hidden"));
+  $(page+"Page").classList.remove("hidden");
+  document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+  if(button) button.classList.add("active");
+  if(page==="orders") loadOrders();
+  if(page==="wallet") loadBalance();
+  if(page==="admin") loadAdmin();
+}
+
+/* قراءة المنتجات بـ select("*") لتجنب افتراض أسماء أعمدة غير مؤكدة.
+   إذا فشل الاستعلام، ستظهر رسالة Supabase التفصيلية على الصفحة. */
+async function loadProducts(){
+  if(!db){$("products").textContent="أدخل مفتاح Supabase أولاً.";return;}
+  $("products").textContent="جاري تحميل المنتجات...";
+  const {data,error}=await db.from("products").select("*").limit(100);
+  if(error){
+    $("products").innerHTML="";
+    const box=document.createElement("div"); box.className="notice error";
+    box.textContent="تعذر تحميل المنتجات من Supabase:\n"+errorText(error);
+    $("products").appendChild(box);
+    console.error("products query failed:",error);
+    return;
+  }
+  if(!data?.length){$("products").textContent="جدول المنتجات متصل، لكن لا توجد منتجات ظاهرة أو لا تسمح سياسات القراءة بعرضها.";return;}
+  $("products").innerHTML=data.map(p=>{
+    const id=p.id;
+    const name=p.name ?? p.title ?? p.product_name ?? "منتج";
+    const description=p.description ?? p.details ?? "";
+    const price=Number(p.price ?? p.amount ?? 0);
+    const image=p.image_url ?? p.image ?? p.photo_url ?? "";
+    const category=p.category ?? p.type ?? "";
+    const active=p.is_active ?? p.active ?? true;
+    if(active===false) return "";
+    return `<article class="product">
+      ${image?`<img src="${escapeHTML(image)}" alt="${escapeHTML(name)}">`:"<div style='height:155px;display:grid;place-items:center;color:#aaa'>KIM CARD</div>"}
+      <div class="info"><h3>${escapeHTML(name)}</h3><p>${escapeHTML(description)}</p>
+      <p class="muted">${escapeHTML(category)}</p><p class="price">$${Number.isFinite(price)?price.toFixed(2):"—"}</p>
+      <button onclick="buyProduct('${escapeHTML(id)}')">شراء</button></div></article>`;
+  }).join("") || "لا توجد منتجات نشطة.";
+}
+
+async function buyProduct(productId){
+  if(!currentUser) return showAuth();
+  if(!requireConnection()) return;
+  /* الخادم يقرأ السعر من جدول المنتجات حتى لا يغيّره المستخدم من المتصفح. */
+  const {error}=await db.rpc("create_order",{p_product_id:productId});
+  if(error) return alert("تعذر إنشاء الطلب:\n"+errorText(error));
+  alert("تم إرسال طلب الشراء للمراجعة.");
+  await loadOrders();
+}
+
+async function loadOrders(){
+  if(!db || !currentUser){$("myOrders").textContent="سجّل الدخول لعرض طلباتك.";return;}
+  const {data,error}=await db.from("orders").select("*").eq("user_id",currentUser.id).order("created_at",{ascending:false});
+  if(error){$("myOrders").textContent="خطأ تحميل الطلبات: "+errorText(error);return;}
+  $("myOrders").innerHTML=(data||[]).map(o=>`
+    <div class="panel"><b>${escapeHTML(o.product_name ?? o.name ?? "طلب")}</b>
+    <p>$${Number(o.price ?? o.amount ?? 0).toFixed(2)}</p>
+    <p class="price">${escapeHTML(o.status)}</p>
+    ${o.rejection_reason?`<p>سبب الرفض: ${escapeHTML(o.rejection_reason)}</p>`:""}</div>
+  `).join("") || "لا توجد طلبات حتى الآن.";
+}
+async function loadBalance(){
+  if(!db || !currentUser){$("balance").textContent="$0.00";return;}
+  const {data,error}=await db.from("profiles").select("balance").eq("id",currentUser.id).maybeSingle();
+  if(error){$("balance").textContent="تعذر قراءة الرصيد";console.error(error);return;}
+  $("balance").textContent="$"+Number(data?.balance||0).toFixed(2);
+}
+
+async function submitTopup(){
+  if(!currentUser) return showAuth();
+  const amount=Number($("topupAmount").value), file=$("topupProof").files[0];
+  if(!Number.isFinite(amount)||amount<=0||!file) return showMessage("topupMessage","أدخل مبلغاً صحيحاً واختر صورة الإثبات.",true);
+  if(!file.type.startsWith("image/")||file.size>5*1024*1024) return showMessage("topupMessage","اختر صورة أقل من 5 ميغابايت.",true);
+  const path=`${currentUser.id}/${crypto.randomUUID()}`;
+  const {error:uploadError}=await db.storage.from("payment-proofs").upload(path,file,{upsert:false,contentType:file.type});
+  if(uploadError) return showMessage("topupMessage","فشل رفع الإثبات: "+errorText(uploadError),true);
+  const {error}=await db.from("topup_requests").insert({
+    user_id:currentUser.id,amount,method:"شام كاش",proof_path:path,status:"قيد المراجعة"
+  });
+  if(error) return showMessage("topupMessage","تم رفع الصورة لكن تعذر إنشاء الطلب: "+errorText(error),true);
+  showMessage("topupMessage","تم إرسال طلب الإضافة للمراجعة. لن يضاف الرصيد إلا بعد موافقة الإدارة.");
+}
+
+async function submitWithdrawal(){
+  if(!currentUser) return showAuth();
+  const amount=Number($("withdrawAmount").value), details=$("withdrawDetails").value.trim();
+  if(!Number.isFinite(amount)||amount<10.1||!details) return showMessage("withdrawMessage","الحد الأدنى 10.1 دولار، وأدخل معلومات الاستلام.",true);
+  const {error}=await db.rpc("create_withdrawal_request",{p_amount:amount,p_method:"شام كاش",p_details:details});
+  if(error) return showMessage("withdrawMessage","تعذر إرسال الطلب: "+errorText(error),true);
+  showMessage("withdrawMessage","تم إرسال طلب السحب للمراجعة.");
+  $("withdrawDetails").value=""; $("withdrawAmount").value="";
+}
+
+async function addProduct(){
+  if(!isAdmin()) return alert("ليس لديك صلاحية إدارة المنتجات.");
+  const name=$("newName").value.trim(), description=$("newDescription").value.trim();
+  const price=Number($("newPrice").value), category=$("newCategory").value, file=$("newImage").files[0];
+  if(!name||!Number.isFinite(price)||price<0||!file) return showMessage("productMessage","أدخل الاسم والسعر واختر صورة.",true);
+  if(!file.type.startsWith("image/")||file.size>5*1024*1024) return showMessage("productMessage","الصورة يجب أن تكون أقل من 5 ميغابايت.",true);
+  const path=`${crypto.randomUUID()}`;
+  const {error:uploadError}=await db.storage.from("product-images").upload(path,file,{upsert:false,contentType:file.type});
+  if(uploadError) return showMessage("productMessage","فشل رفع الصورة: "+errorText(uploadError),true);
+  const {data:urlData}=db.storage.from("product-images").getPublicUrl(path);
+  const {error}=await db.from("products").insert({
+    name,description,price,category,image_url:urlData.publicUrl,is_active:true
+  });
+  if(error) return showMessage("productMessage","فشل حفظ المنتج. قد تختلف أعمدة جدول products: "+errorText(error),true);
+  showMessage("productMessage","تمت إضافة المنتج بنجاح.");
+  $("newName").value="";$("newDescription").value="";$("newPrice").value="";$("newImage").value="";
+  await loadProducts();await loadAdminProducts();
+}
+async function loadAdminProducts(){
+  const {data,error}=await db.from("products").select("*").limit(100);
+  if(error){$("adminProducts").textContent=errorText(error);return;}
+  $("adminProducts").innerHTML=(data||[]).map(p=>`
+    <div class="item"><b>${escapeHTML(p.name??p.title??"منتج")}</b>
+    — $${Number(p.price??0).toFixed(2)}
+    <button class="danger" onclick="deleteProduct('${escapeHTML(p.id)}')">حذف</button></div>
+  `).join("")||"لا توجد منتجات.";
+}
+async function deleteProduct(id){
+  if(!isAdmin()||!confirm("هل تريد حذف المنتج؟"))return;
+  const {error}=await db.from("products").delete().eq("id",id);
+  if(error)return alert("تعذر الحذف: "+errorText(error));
+  await loadProducts();await loadAdminProducts();
+}
+async function loadAdmin(){
+  if(!isAdmin()) return alert("غير مصرح لك بالدخول.");
+  await Promise.all([loadAdminProducts(),loadAdminOrders(),loadAdminTopups(),loadAdminWithdrawals()]);
+}
+async function loadAdminOrders(){
+  const {data,error}=await db.from("orders").select("*").order("created_at",{ascending:false});
+  if(error){$("adminOrders").textContent=errorText(error);return;}
+  $("adminOrders").innerHTML=(data||[]).map(o=>`
+    <div class="item"><b>${escapeHTML(o.product_name??"طلب شراء")}</b>
+    <p>$${Number(o.price??0).toFixed(2)} — ${escapeHTML(o.status)}</p>
+    <button onclick="reviewOrder('${escapeHTML(o.id)}','approve')">موافقة</button>
+    <button class="danger" onclick="reviewOrder('${escapeHTML(o.id)}','reject')">رفض</button></div>
+  `).join("")||"لا توجد طلبات.";
+}
+async function reviewOrder(id,action){
+  if(!isAdmin())return;
+  const reason=action==="reject"?prompt("اكتب سبب الرفض:"):"";
+  if(action==="reject"&&!reason)return;
+  const {error}=await db.rpc("admin_review_order",{p_order_id:id,p_action:action,p_reason:reason});
+  if(error)return alert("تعذر تنفيذ العملية: "+errorText(error));
+  await loadAdminOrders();await loadOrders();await loadBalance();
+}
+async function loadAdminTopups(){
+  const {data,error}=await db.from("topup_requests").select("*").order("created_at",{ascending:false});
+  if(error){$("adminTopups").textContent=errorText(error);return;}
+  $("adminTopups").innerHTML=(data||[]).map(t=>`
+    <div class="item"><p>طلب إضافة رصيد — $${Number(t.amount).toFixed(2)}</p><p>${escapeHTML(t.status)}</p>
+    <button onclick="reviewTopup('${escapeHTML(t.id)}','approve')">موافقة</button>
+    <button class="danger" onclick="reviewTopup('${escapeHTML(t.id)}','reject')">رفض</button></div>
+  `).join("")||"لا توجد طلبات.";
+}
+async function reviewTopup(id,action){
+  if(!isAdmin())return;
+  const reason=action==="reject"?prompt("سبب الرفض:"):"";
+  if(action==="reject"&&!reason)return;
+  const {error}=await db.rpc("admin_review_topup",{p_request_id:id,p_action:action,p_reason:reason});
+  if(error)return alert("تعذر تنفيذ العملية: "+errorText(error));
+  await loadAdminTopups();await loadBalance();
+}
+async function loadAdminWithdrawals(){
+  const {data,error}=await db.from("withdrawal_requests").select("id,amount,status,created_at").order("created_at",{ascending:false});
+  if(error){$("adminWithdrawals").textContent=errorText(error);return;}
+  $("adminWithdrawals").innerHTML=(data||[]).map(w=>`
+    <div class="item"><p>طلب سحب — $${Number(w.amount).toFixed(2)}</p><p>${escapeHTML(w.status)}</p>
+    <button onclick="reviewWithdrawal('${escapeHTML(w.id)}','approve')">موافقة مبدئية</button>
+    <button onclick="reviewWithdrawal('${escapeHTML(w.id)}','complete')">تم تنفيذ التحويل</button>
+    <button class="danger" onclick="reviewWithdrawal('${escapeHTML(w.id)}','reject')">رفض</button></div>
+  `).join("")||"لا توجد طلبات.";
+}
+async function reviewWithdrawal(id,action){
+  if(!isAdmin())return;
+  const reason=action==="reject"?prompt("سبب الرفض:"):"";
+  if(action==="reject"&&!reason)return;
+  const {error}=await db.rpc("admin_review_withdrawal",{p_request_id:id,p_action:action,p_reason:reason});
+  if(error)return alert("تعذر تنفيذ العملية: "+errorText(error));
+  await loadAdminWithdrawals();await loadBalance();
+}
+
+if(db){
+  db.auth.onAuthStateChange((event) => {
+    if(event==="SIGNED_IN" || event==="SIGNED_OUT" || event==="USER_UPDATED") {
+      setTimeout(()=>loadSession(),0);
+    }
+  });
+  loadSession();
+  loadProducts();
+} else {
+  $("products").textContent="الاتصال بقاعدة البيانات غير مهيأ.";
+}
+</script>
+</body>
+</html>
